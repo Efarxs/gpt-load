@@ -522,6 +522,7 @@ export default {
     requestInfo: "请求信息",
     upstreamAddress: "上游地址",
     requestContent: "请求内容",
+    upstreamRequestContent: "发给上游的请求体",
     errorInfo: "错误信息",
     customColumns: "自定义列",
   },

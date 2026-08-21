@@ -538,6 +538,7 @@ export default {
     requestInfo: "Request Information",
     upstreamAddress: "Upstream Address",
     requestContent: "Request Content",
+    upstreamRequestContent: "Upstream Request Body",
     errorInfo: "Error Information",
     customColumns: "Custom Columns",
   },

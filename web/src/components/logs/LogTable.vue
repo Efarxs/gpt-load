@@ -895,6 +895,29 @@ const deselectAllColumns = () => {
                   {{ formatJsonString(selectedLog.request_body) }}
                 </div>
               </div>
+
+              <div class="compact-field" v-if="selectedLog.upstream_request_body">
+                <div class="compact-field-header">
+                  <span class="compact-field-title">{{ t("logs.upstreamRequestContent") }}</span>
+                  <n-button
+                    size="tiny"
+                    text
+                    @click="
+                      copyContent(
+                        formatJsonString(selectedLog.upstream_request_body),
+                        t('logs.upstreamRequestContent')
+                      )
+                    "
+                  >
+                    <template #icon>
+                      <n-icon :component="CopyOutline" />
+                    </template>
+                  </n-button>
+                </div>
+                <div class="compact-field-content">
+                  {{ formatJsonString(selectedLog.upstream_request_body) }}
+                </div>
+              </div>
             </div>
           </n-card>
 

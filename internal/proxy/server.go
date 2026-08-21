@@ -234,7 +234,7 @@ func (ps *ProxyServer) executeRequestWithRetry(
 	if err != nil {
 		logrus.Errorf("Failed to select a key for group %s on attempt %d: %v", group.Name, retryCount+1, err)
 		response.Error(c, app_errors.NewAPIError(app_errors.ErrNoKeysAvailable, err.Error()))
-		ps.logRequest(c, originalGroup, group, nil, startTime, http.StatusServiceUnavailable, err, isStream, "", channelHandler, bodyBytes, models.RequestTypeFinal)
+		ps.logRequest(c, originalGroup, group, nil, startTime, http.StatusServiceUnavailable, err, isStream, "", channelHandler, bodyBytes, nil, models.RequestTypeFinal)
 		return
 	}
 	defer ps.keyProvider.ReleaseKey(group.ID, apiKey.ID, maxConc)
@@ -304,7 +304,7 @@ func (ps *ProxyServer) executeRequestWithRetry(
 	finalBodyBytes, err := channelHandler.ApplyModelRedirect(req, bodyBytes, group)
 	if err != nil {
 		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, err.Error()))
-		ps.logRequest(c, originalGroup, group, apiKey, startTime, http.StatusBadRequest, err, isStream, upstreamURL, channelHandler, bodyBytes, models.RequestTypeFinal)
+		ps.logRequest(c, originalGroup, group, apiKey, startTime, http.StatusBadRequest, err, isStream, upstreamURL, channelHandler, bodyBytes, nil, models.RequestTypeFinal)
 		return
 	}
 
@@ -343,7 +343,7 @@ func (ps *ProxyServer) executeRequestWithRetry(
 	if err != nil || shouldRetryByStatus {
 		if err != nil && app_errors.IsIgnorableError(err) {
 			logrus.Debugf("Client-side ignorable error for key %s, aborting retries: %v", utils.MaskAPIKey(apiKey.KeyValue), err)
-			ps.logRequest(c, originalGroup, group, apiKey, startTime, 499, err, isStream, upstreamURL, channelHandler, bodyBytes, models.RequestTypeFinal)
+			ps.logRequest(c, originalGroup, group, apiKey, startTime, 499, err, isStream, upstreamURL, channelHandler, bodyBytes, finalBodyBytes, models.RequestTypeFinal)
 			return
 		}
 
@@ -390,7 +390,7 @@ func (ps *ProxyServer) executeRequestWithRetry(
 			requestType = models.RequestTypeFinal
 		}
 
-		ps.logRequest(c, originalGroup, group, apiKey, startTime, statusCode, errors.New(parsedError), isStream, upstreamURL, channelHandler, bodyBytes, requestType)
+		ps.logRequest(c, originalGroup, group, apiKey, startTime, statusCode, errors.New(parsedError), isStream, upstreamURL, channelHandler, bodyBytes, finalBodyBytes, requestType)
 
 		// 如果是最后一次尝试，直接返回错误，不再递归
 		if isLastAttempt {
@@ -446,7 +446,7 @@ func (ps *ProxyServer) executeRequestWithRetry(
 		}
 	}
 
-	ps.logRequest(c, originalGroup, group, apiKey, startTime, resp.StatusCode, nil, isStream, upstreamURL, channelHandler, bodyBytes, models.RequestTypeFinal)
+	ps.logRequest(c, originalGroup, group, apiKey, startTime, resp.StatusCode, nil, isStream, upstreamURL, channelHandler, bodyBytes, finalBodyBytes, models.RequestTypeFinal)
 }
 
 func shouldFailoverOnStatusCode(statusCode int, group *models.Group) bool {
@@ -469,34 +469,39 @@ func (ps *ProxyServer) logRequest(
 	upstreamAddr string,
 	channelHandler channel.ChannelProxy,
 	bodyBytes []byte,
+	outboundBody []byte,
 	requestType string,
 ) {
 	if ps.requestLogService == nil {
 		return
 	}
 
-	var requestBodyToLog, userAgent string
+	var requestBodyToLog, upstreamBodyToLog, userAgent string
 
 	if group.EffectiveConfig.EnableRequestBodyLogging {
 		requestBodyToLog = utils.TruncateString(string(bodyBytes), 65000)
+		if len(outboundBody) > 0 {
+			upstreamBodyToLog = utils.TruncateString(string(outboundBody), 65000)
+		}
 		userAgent = c.Request.UserAgent()
 	}
 
 	duration := time.Since(startTime).Milliseconds()
 
 	logEntry := &models.RequestLog{
-		GroupID:      group.ID,
-		GroupName:    group.Name,
-		IsSuccess:    finalError == nil && statusCode < 400,
-		SourceIP:     c.ClientIP(),
-		StatusCode:   statusCode,
-		RequestPath:  utils.TruncateString(c.Request.URL.String(), 500),
-		Duration:     duration,
-		UserAgent:    userAgent,
-		RequestType:  requestType,
-		IsStream:     isStream,
-		UpstreamAddr: utils.TruncateString(upstreamAddr, 500),
-		RequestBody:  requestBodyToLog,
+		GroupID:             group.ID,
+		GroupName:           group.Name,
+		IsSuccess:           finalError == nil && statusCode < 400,
+		SourceIP:            c.ClientIP(),
+		StatusCode:          statusCode,
+		RequestPath:         utils.TruncateString(c.Request.URL.String(), 500),
+		Duration:            duration,
+		UserAgent:           userAgent,
+		RequestType:         requestType,
+		IsStream:            isStream,
+		UpstreamAddr:        utils.TruncateString(upstreamAddr, 500),
+		RequestBody:         requestBodyToLog,
+		UpstreamRequestBody: upstreamBodyToLog,
 	}
 
 	// Set parent group
