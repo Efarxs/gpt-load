@@ -21,11 +21,13 @@ var MessagesEnUS = map[string]string{
 	"auth.logout_success": "Logout successful",
 
 	// Group related
-	"group.created":     "Group created successfully",
-	"group.updated":     "Group updated successfully",
-	"group.deleted":     "Group deleted successfully",
-	"group.not_found":   "Group not found",
-	"group.name_exists": "Group name already exists",
+	"group.created":      "Group created successfully",
+	"group.updated":      "Group updated successfully",
+	"group.deleted":      "Group deleted successfully",
+	"group.not_found":    "Group not found",
+	"group.name_exists":  "Group name already exists",
+	"group.paused":       "Group is paused",
+	"error.group_paused": "This group is paused and unavailable",
 
 	// Key related
 	"key.created":         "Key created successfully",
@@ -120,6 +122,8 @@ var MessagesEnUS = map[string]string{
 	"success.invalid_keys_cleared": "{{.count}} invalid keys cleared",
 	"success.all_keys_cleared":     "{{.count}} keys cleared",
 	"success.groups_reordered":     "Group order saved",
+	"success.group_paused":         "Group paused",
+	"success.group_enabled":        "Group enabled",
 
 	// Password security related
 	"security.password_too_short":         "{{.keyType}} is too short ({{.length}} characters), recommend at least 16 characters",

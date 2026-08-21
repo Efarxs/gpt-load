@@ -1,6 +1,6 @@
 FROM --platform=$BUILDPLATFORM node:20-alpine AS builder
 
-ARG VERSION=1.2.1
+ARG VERSION=1.2.2
 WORKDIR /build
 COPY ./web/package*.json ./
 RUN npm ci
@@ -10,7 +10,7 @@ RUN VITE_VERSION=${VERSION} npm run build
 
 FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder2
 
-ARG VERSION=1.2.1
+ARG VERSION=1.2.2
 ARG TARGETOS
 ARG TARGETARCH
 ENV GO111MODULE=on \

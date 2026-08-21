@@ -10,7 +10,15 @@ import type {
 import { appState } from "@/utils/app-state";
 import { copy } from "@/utils/clipboard";
 import { getGroupDisplayName, maskProxyKeys } from "@/utils/display";
-import { CopyOutline, EyeOffOutline, EyeOutline, Pencil, Trash } from "@vicons/ionicons5";
+import {
+  CopyOutline,
+  EyeOffOutline,
+  EyeOutline,
+  PauseCircleOutline,
+  Pencil,
+  PlayCircleOutline,
+  Trash,
+} from "@vicons/ionicons5";
 import {
   NButton,
   NButtonGroup,
@@ -91,7 +99,10 @@ const isAggregateGroup = computed(() => {
 
 // 计算有效子分组数（weight > 0 且有可用密钥）
 const activeSubGroupsCount = computed(() => {
-  return props.subGroups?.filter(sg => sg.weight > 0 && sg.active_keys > 0).length || 0;
+  return (
+    props.subGroups?.filter(sg => sg.weight > 0 && sg.active_keys > 0 && !sg.group?.paused)
+      .length || 0
+  );
 });
 
 // 计算禁用子分组数（weight = 0）
@@ -224,6 +235,32 @@ function handleCopy() {
   showCopyModal.value = true;
 }
 
+async function handleTogglePause() {
+  if (!props.group?.id) {
+    return;
+  }
+  const nextPaused = !props.group.paused;
+  dialog.warning({
+    title: nextPaused ? t("keys.pauseGroup") : t("keys.enableGroup"),
+    content: nextPaused
+      ? t("keys.confirmPauseGroup", { name: getGroupDisplayName(props.group) })
+      : t("keys.confirmEnableGroup", { name: getGroupDisplayName(props.group) }),
+    positiveText: t("common.confirm"),
+    negativeText: t("common.cancel"),
+    onPositiveClick: async () => {
+      if (!props.group?.id) {
+        return;
+      }
+      try {
+        const updated = await keysApi.setGroupPaused(props.group.id, nextPaused);
+        emit("refresh", updated);
+      } catch {
+        return false;
+      }
+    },
+  });
+}
+
 function handleNavigateToGroup(groupId: number) {
   emit("navigate-to-group", groupId);
 }
@@ -342,6 +379,9 @@ function resetPage() {
           <div class="header-left">
             <h3 class="group-title">
               {{ group ? getGroupDisplayName(group) : t("keys.selectGroup") }}
+              <n-tag v-if="group?.paused" type="error" size="small" round>
+                {{ t("keys.paused") }}
+              </n-tag>
               <n-tooltip trigger="hover" v-if="group && group.endpoint">
                 <template #trigger>
                   <code class="group-url" @click="copyUrl(group.endpoint)">
@@ -353,6 +393,19 @@ function resetPage() {
             </h3>
           </div>
           <div class="header-actions">
+            <n-button
+              quaternary
+              circle
+              size="small"
+              :type="group?.paused ? 'success' : 'warning'"
+              @click="handleTogglePause"
+              :title="group?.paused ? t('keys.enableGroup') : t('keys.pauseGroup')"
+              :disabled="!group"
+            >
+              <template #icon>
+                <n-icon :component="group?.paused ? PlayCircleOutline : PauseCircleOutline" />
+              </template>
+            </n-button>
             <n-button
               v-if="group?.group_type !== 'aggregate'"
               quaternary

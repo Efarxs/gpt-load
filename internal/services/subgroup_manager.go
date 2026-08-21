@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	app_errors "gpt-load/internal/errors"
 	"gpt-load/internal/models"
 	"gpt-load/internal/store"
 	"sync"
@@ -40,6 +41,9 @@ func (m *SubGroupManager) SelectSubGroup(group *models.Group) (string, error) {
 
 	selector := m.getSelector(group)
 	if selector == nil {
+		if allSubGroupsPaused(group) {
+			return "", app_errors.ErrGroupPaused
+		}
 		return "", fmt.Errorf("no valid sub-groups available for aggregate group '%s'", group.Name)
 	}
 
@@ -112,6 +116,9 @@ func (m *SubGroupManager) createSelector(group *models.Group) *selector {
 
 	var items []subGroupItem
 	for _, sg := range group.SubGroups {
+		if sg.SubGroupPaused {
+			continue
+		}
 		items = append(items, subGroupItem{
 			name:          sg.SubGroupName,
 			subGroupID:    sg.SubGroupID,
@@ -218,6 +225,19 @@ func (s *selector) selectByWeight() *subGroupItem {
 
 	best.currentWeight -= totalWeight
 	return best
+}
+
+// allSubGroupsPaused reports whether every weighted sub-group is paused.
+func allSubGroupsPaused(group *models.Group) bool {
+	if group == nil || len(group.SubGroups) == 0 {
+		return false
+	}
+	for _, sg := range group.SubGroups {
+		if !sg.SubGroupPaused {
+			return false
+		}
+	}
+	return true
 }
 
 // hasActiveKeys checks if a sub-group has available API keys

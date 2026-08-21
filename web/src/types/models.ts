@@ -68,6 +68,7 @@ export interface Group {
   display_name: string;
   description: string;
   sort: number;
+  paused?: boolean;
   test_model: string;
   channel_type: ChannelType;
   upstreams: UpstreamInfo[];

@@ -64,7 +64,8 @@ type GroupSubGroup struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 
 	// Lightweight association - only store necessary info for performance
-	SubGroupName string `gorm:"-" json:"sub_group_name,omitempty"`
+	SubGroupName   string `gorm:"-" json:"sub_group_name,omitempty"`
+	SubGroupPaused bool   `gorm:"-" json:"sub_group_paused,omitempty"`
 }
 
 // SubGroupInfo 用于API响应的子分组信息
@@ -98,6 +99,7 @@ type Group struct {
 	ValidationEndpoint  string               `gorm:"type:varchar(255)" json:"validation_endpoint"`
 	ChannelType         string               `gorm:"type:varchar(50);not null" json:"channel_type"`
 	Sort                int                  `gorm:"default:0" json:"sort"`
+	Paused              bool                 `gorm:"not null;default:false" json:"paused"`
 	TestModel           string               `gorm:"type:varchar(255);not null" json:"test_model"`
 	ParamOverrides      datatypes.JSONMap    `gorm:"type:json" json:"param_overrides"`
 	ModelParamOverrides datatypes.JSONMap    `gorm:"type:json" json:"model_param_overrides"`

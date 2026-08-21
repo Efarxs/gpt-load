@@ -5,7 +5,7 @@
 [![Release](https://img.shields.io/github/v/release/Efarxs/gpt-load)](https://github.com/Efarxs/gpt-load/releases)
 ![Go Version](https://img.shields.io/badge/Go-1.24+-blue.svg)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-v1.2.1-blue.svg)
+![Version](https://img.shields.io/badge/version-v1.2.2-blue.svg)
 
 高性能・エンタープライズグレードの AI API トランスペアレントプロキシ。本リポジトリは [tbphp/gpt-load](https://github.com/tbphp/gpt-load) の **二次開発・最適化版**（MIT）です。原作者の著作権は維持し、本 fork ではプロトコル変換、チャネル親和性、画像/動画ルート、Codex / Claude Code 互換修正を追加しています。
 

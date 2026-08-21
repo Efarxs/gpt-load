@@ -22,6 +22,15 @@ func (e *APIError) Error() string {
 	return e.Message
 }
 
+// Is 按错误码比较，便于 errors.Is 识别同一类 API 错误。
+func (e *APIError) Is(target error) bool {
+	t, ok := target.(*APIError)
+	if !ok || e == nil || t == nil {
+		return false
+	}
+	return e.Code == t.Code
+}
+
 // Predefined API errors
 var (
 	ErrBadRequest         = &APIError{HTTPStatus: http.StatusBadRequest, Code: "BAD_REQUEST", Message: "Invalid request parameters"}
@@ -33,6 +42,7 @@ var (
 	ErrDatabase           = &APIError{HTTPStatus: http.StatusInternalServerError, Code: "DATABASE_ERROR", Message: "Database operation failed"}
 	ErrUnauthorized       = &APIError{HTTPStatus: http.StatusUnauthorized, Code: "UNAUTHORIZED", Message: "Authentication failed"}
 	ErrForbidden          = &APIError{HTTPStatus: http.StatusForbidden, Code: "FORBIDDEN", Message: "You do not have permission to access this resource"}
+	ErrGroupPaused        = &APIError{HTTPStatus: http.StatusForbidden, Code: "GROUP_PAUSED", Message: "Group is paused"}
 	ErrTaskInProgress     = &APIError{HTTPStatus: http.StatusConflict, Code: "TASK_IN_PROGRESS", Message: "A task is already in progress"}
 	ErrBadGateway         = &APIError{HTTPStatus: http.StatusBadGateway, Code: "BAD_GATEWAY", Message: "Upstream service error"}
 	ErrNoActiveKeys       = &APIError{HTTPStatus: http.StatusServiceUnavailable, Code: "NO_ACTIVE_KEYS", Message: "No active API keys available for this group"}

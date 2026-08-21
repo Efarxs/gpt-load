@@ -1,7 +1,7 @@
 {
   "name": "gpt-load-frontend",
   "private": true,
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "GPT Load Balancer Frontend - A modern Vue 3 frontend for GPT load balancing service",
   "type": "module",
   "keywords": ["vue3", "typescript", "vite", "naive-ui", "gpt-load", "frontend"],

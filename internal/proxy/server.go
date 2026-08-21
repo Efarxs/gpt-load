@@ -69,9 +69,18 @@ func (ps *ProxyServer) HandleProxy(c *gin.Context) {
 		return
 	}
 
+	if originalGroup.Paused {
+		response.ErrorI18nFromAPIError(c, app_errors.ErrGroupPaused, "error.group_paused")
+		return
+	}
+
 	// Select sub-group if this is an aggregate group
 	subGroupName, err := ps.subGroupManager.SelectSubGroup(originalGroup)
 	if err != nil {
+		if errors.Is(err, app_errors.ErrGroupPaused) {
+			response.ErrorI18nFromAPIError(c, app_errors.ErrGroupPaused, "error.group_paused")
+			return
+		}
 		logrus.WithFields(logrus.Fields{
 			"aggregate_group": originalGroup.Name,
 			"error":           err,
@@ -87,6 +96,11 @@ func (ps *ProxyServer) HandleProxy(c *gin.Context) {
 			response.Error(c, app_errors.ParseDBError(err))
 			return
 		}
+	}
+
+	if group.Paused {
+		response.ErrorI18nFromAPIError(c, app_errors.ErrGroupPaused, "error.group_paused")
+		return
 	}
 
 	channelHandler, err := ps.channelFactory.GetChannel(group)

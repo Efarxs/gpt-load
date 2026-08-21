@@ -24,7 +24,7 @@ class VersionService {
   private currentVersion: string;
 
   constructor() {
-    this.currentVersion = import.meta.env.VITE_VERSION || "1.2.1";
+    this.currentVersion = import.meta.env.VITE_VERSION || "1.2.2";
   }
 
   /**

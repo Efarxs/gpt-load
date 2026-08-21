@@ -1,7 +1,7 @@
 package version
 
 // Version 当前发行版本。
-var Version = "1.2.1"
+var Version = "1.2.2"
 
 const (
 	// GitHubRepo 本二次开发仓库，用于更新检测与源码入口。

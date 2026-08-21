@@ -21,11 +21,13 @@ var MessagesJaJP = map[string]string{
 	"auth.logout_success": "ログアウト成功",
 
 	// Group related
-	"group.created":     "グループが作成されました",
-	"group.updated":     "グループが更新されました",
-	"group.deleted":     "グループが削除されました",
-	"group.not_found":   "グループが存在しません",
-	"group.name_exists": "グループ名が既に存在します",
+	"group.created":      "グループが作成されました",
+	"group.updated":      "グループが更新されました",
+	"group.deleted":      "グループが削除されました",
+	"group.not_found":    "グループが存在しません",
+	"group.name_exists":  "グループ名が既に存在します",
+	"group.paused":       "グループは一時停止中です",
+	"error.group_paused": "このグループは一時停止中のため利用できません",
 
 	// Key related
 	"key.created":         "キーが作成されました",
@@ -120,6 +122,8 @@ var MessagesJaJP = map[string]string{
 	"success.invalid_keys_cleared": "{{.count}}個の無効なキーがクリアされました",
 	"success.all_keys_cleared":     "{{.count}}個のキーがクリアされました",
 	"success.groups_reordered":     "グループの並び順を保存しました",
+	"success.group_paused":         "グループを一時停止しました",
+	"success.group_enabled":        "グループを有効にしました",
 
 	// Password security related
 	"security.password_too_short":         "{{.keyType}}が短すぎます（{{.length}}文字）。少なくとも16文字を推奨します",

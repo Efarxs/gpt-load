@@ -5,7 +5,7 @@ English | [中文](README_CN.md) | [日本語](README_JP.md)
 [![Release](https://img.shields.io/github/v/release/Efarxs/gpt-load)](https://github.com/Efarxs/gpt-load/releases)
 ![Go Version](https://img.shields.io/badge/Go-1.24+-blue.svg)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-v1.2.1-blue.svg)
+![Version](https://img.shields.io/badge/version-v1.2.2-blue.svg)
 
 A high-performance, enterprise-grade AI API transparent proxy. This repository is an **optimized fork** of [tbphp/gpt-load](https://github.com/tbphp/gpt-load) (MIT). Original copyright remains with the upstream authors; this fork adds protocol conversion, channel affinity, media routes, and Codex/Claude Code compatibility fixes.
 

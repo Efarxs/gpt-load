@@ -221,6 +221,37 @@ func (s *Server) UpdateGroup(c *gin.Context) {
 	response.Success(c, s.newGroupResponse(group))
 }
 
+// GroupPausedRequest 暂停或启用分组。
+type GroupPausedRequest struct {
+	Paused bool `json:"paused"`
+}
+
+// SetGroupPaused 暂停或启用指定分组。
+func (s *Server) SetGroupPaused(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		response.ErrorI18nFromAPIError(c, app_errors.ErrBadRequest, "validation.invalid_group_id")
+		return
+	}
+
+	var req GroupPausedRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrInvalidJSON, err.Error()))
+		return
+	}
+
+	group, err := s.GroupService.SetGroupPaused(c.Request.Context(), uint(id), req.Paused)
+	if s.handleGroupError(c, err) {
+		return
+	}
+
+	msgID := "success.group_enabled"
+	if req.Paused {
+		msgID = "success.group_paused"
+	}
+	response.SuccessI18n(c, msgID, s.newGroupResponse(group))
+}
+
 // ReorderGroups handles batch reorder updates for groups.
 func (s *Server) ReorderGroups(c *gin.Context) {
 	var req GroupReorderRequest
@@ -259,6 +290,7 @@ type GroupResponse struct {
 	Upstreams           datatypes.JSON      `json:"upstreams"`
 	ChannelType         string              `json:"channel_type"`
 	Sort                int                 `json:"sort"`
+	Paused              bool                `json:"paused"`
 	TestModel           string              `json:"test_model"`
 	ValidationEndpoint  string              `json:"validation_endpoint"`
 	ParamOverrides      datatypes.JSONMap   `json:"param_overrides"`
@@ -304,6 +336,7 @@ func (s *Server) newGroupResponse(group *models.Group) *GroupResponse {
 		Upstreams:           group.Upstreams,
 		ChannelType:         group.ChannelType,
 		Sort:                group.Sort,
+		Paused:              group.Paused,
 		TestModel:           group.TestModel,
 		ValidationEndpoint:  group.ValidationEndpoint,
 		ParamOverrides:      group.ParamOverrides,

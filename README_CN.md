@@ -5,7 +5,7 @@
 [![Release](https://img.shields.io/github/v/release/Efarxs/gpt-load)](https://github.com/Efarxs/gpt-load/releases)
 ![Go Version](https://img.shields.io/badge/Go-1.24+-blue.svg)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-v1.2.1-blue.svg)
+![Version](https://img.shields.io/badge/version-v1.2.2-blue.svg)
 
 高性能、企业级 AI 接口透明代理。本仓库是 [tbphp/gpt-load](https://github.com/tbphp/gpt-load) 的 **二次开发优化版**（MIT）。原作者版权保留；本 fork 增加了协议转换、渠道亲和、生图/生视频路由，以及 Codex / Claude Code 兼容修复。
 

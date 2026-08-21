@@ -512,6 +512,29 @@ func (s *GroupService) UpdateGroup(ctx context.Context, id uint, params GroupUpd
 	return &group, nil
 }
 
+// SetGroupPaused 暂停或启用分组，变更后刷新分组缓存。
+func (s *GroupService) SetGroupPaused(ctx context.Context, id uint, paused bool) (*models.Group, error) {
+	var group models.Group
+	if err := s.db.WithContext(ctx).First(&group, id).Error; err != nil {
+		return nil, app_errors.ParseDBError(err)
+	}
+
+	if group.Paused == paused {
+		return &group, nil
+	}
+
+	if err := s.db.WithContext(ctx).Model(&group).Update("paused", paused).Error; err != nil {
+		return nil, app_errors.ParseDBError(err)
+	}
+	group.Paused = paused
+
+	if err := s.groupManager.Invalidate(); err != nil {
+		logrus.WithContext(ctx).WithError(err).Error("failed to invalidate group cache")
+	}
+
+	return &group, nil
+}
+
 // DeleteGroup removes a group and associated resources.
 func (s *GroupService) DeleteGroup(ctx context.Context, id uint) error {
 	var apiKeys []models.APIKey
@@ -607,6 +630,7 @@ func (s *GroupService) CopyGroup(ctx context.Context, sourceGroupID uint, copyKe
 	newGroup.CreatedAt = time.Time{}
 	newGroup.UpdatedAt = time.Time{}
 	newGroup.LastValidatedAt = nil
+	newGroup.Paused = false
 
 	if err := tx.Create(&newGroup).Error; err != nil {
 		return nil, app_errors.ParseDBError(err)

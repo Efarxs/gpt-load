@@ -45,6 +45,12 @@ export const keysApi = {
     return http.delete(`/groups/${groupId}`);
   },
 
+  // 暂停或启用分组
+  async setGroupPaused(groupId: number, paused: boolean): Promise<Group> {
+    const res = await http.put(`/groups/${groupId}/paused`, { paused });
+    return res.data;
+  },
+
   // 获取分组统计信息
   async getGroupStats(groupId: number): Promise<GroupStatsResponse> {
     const res = await http.get(`/groups/${groupId}/stats`);

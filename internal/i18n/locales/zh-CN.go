@@ -21,11 +21,13 @@ var MessagesZhCN = map[string]string{
 	"auth.logout_success": "退出成功",
 
 	// Group related
-	"group.created":     "分组创建成功",
-	"group.updated":     "分组更新成功",
-	"group.deleted":     "分组删除成功",
-	"group.not_found":   "分组不存在",
-	"group.name_exists": "分组名称已存在",
+	"group.created":      "分组创建成功",
+	"group.updated":      "分组更新成功",
+	"group.deleted":      "分组删除成功",
+	"group.not_found":    "分组不存在",
+	"group.name_exists":  "分组名称已存在",
+	"group.paused":       "分组已暂停",
+	"error.group_paused": "分组已暂停，暂不可用",
 
 	// Key related
 	"key.created":         "密钥创建成功",
@@ -120,6 +122,8 @@ var MessagesZhCN = map[string]string{
 	"success.invalid_keys_cleared": "{{.count}}个无效密钥已清除",
 	"success.all_keys_cleared":     "{{.count}}个密钥已清除",
 	"success.groups_reordered":     "分组排序已保存",
+	"success.group_paused":         "分组已暂停",
+	"success.group_enabled":        "分组已启用",
 
 	// Password security related
 	"security.password_too_short":         "{{.keyType}}长度不足（{{.length}}字符），建议至少16字符",

@@ -31,10 +31,13 @@ const { t } = useI18n();
 
 // 获取子分组状态
 function getSubGroupStatus(subGroup: SubGroupInfo): {
-  status: "active" | "disabled" | "unavailable";
+  status: "active" | "disabled" | "unavailable" | "paused";
   text: string;
   type: "success" | "warning" | "error";
 } {
+  if (subGroup.group?.paused) {
+    return { status: "paused", text: t("subGroups.statusPaused"), type: "error" };
+  }
   if (subGroup.weight === 0) {
     return { status: "disabled", text: t("subGroups.statusDisabled"), type: "warning" };
   }
@@ -71,7 +74,7 @@ const editingSubGroup = ref<SubGroupInfo | null>(null);
 
 // 搜索和过滤状态
 const searchText = ref("");
-const statusFilter = ref<"all" | "active" | "disabled" | "unavailable">("all");
+const statusFilter = ref<"all" | "active" | "disabled" | "unavailable" | "paused">("all");
 
 // 状态过滤选项
 const statusOptions = [
@@ -79,6 +82,7 @@ const statusOptions = [
   { label: t("subGroups.statusActive"), value: "active" },
   { label: t("subGroups.statusDisabled"), value: "disabled" },
   { label: t("subGroups.statusUnavailable"), value: "unavailable" },
+  { label: t("subGroups.statusPaused"), value: "paused" },
 ];
 
 // 计算带百分比的子分组数据并按权重排序
@@ -223,7 +227,10 @@ function formatNumber(num: number): string {
             v-for="subGroup in filteredSubGroups"
             :key="subGroup.group.id"
             class="key-card status-sub-group"
-            :class="{ disabled: subGroup.weight === 0 || subGroup.active_keys === 0 }"
+            :class="{
+              disabled:
+                subGroup.weight === 0 || subGroup.active_keys === 0 || !!subGroup.group?.paused,
+            }"
           >
             <!-- Main info row: display name + group name -->
             <div class="key-main">

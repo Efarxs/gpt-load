@@ -669,6 +669,23 @@ function resetPage() {
           </template>
           {{ t("keys.deleteKey") }}
         </n-button>
+        <n-button
+          type="warning"
+          size="small"
+          :disabled="!selectedGroup?.id || isDeling"
+          @click="clearAllInvalid"
+        >
+          {{ t("keys.clearInvalidKeysShort") }}
+        </n-button>
+        <n-button
+          type="error"
+          ghost
+          size="small"
+          :disabled="!selectedGroup?.id || isDeling"
+          @click="clearAll"
+        >
+          {{ t("keys.clearAllKeysShort") }}
+        </n-button>
       </div>
       <div class="toolbar-right">
         <n-space :size="12" align="center">
@@ -997,6 +1014,7 @@ function resetPage() {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .toolbar-right {
