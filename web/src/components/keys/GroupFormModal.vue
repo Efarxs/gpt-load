@@ -119,6 +119,7 @@ const routingConfigKeys = [
   "enable_channel_affinity",
   "session_affinity_ttl",
   "strip_orphan_tool_flags",
+  "max_concurrency_per_key",
 ];
 
 const visibleConfigOptions = computed(() => {
@@ -900,6 +901,16 @@ async function handleSubmit() {
                     {{ t("keys.groupConfigTooltip") }}
                   </n-tooltip>
                 </h5>
+
+                <n-alert
+                  v-if="formData.group_type !== 'aggregate'"
+                  type="info"
+                  :bordered="false"
+                  style="margin-bottom: 12px"
+                >
+                  <div>{{ t("keys.protocolRoutingHint") }}</div>
+                  <div style="margin-top: 6px">{{ t("keys.protocolRoutingPaths") }}</div>
+                </n-alert>
 
                 <div class="config-items">
                   <n-form-item

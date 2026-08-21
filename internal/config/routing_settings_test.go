@@ -40,6 +40,9 @@ func TestGetEffectiveConfig_MissingRoutingKeysStayOff(t *testing.T) {
 	if cfg.SessionAffinityTTL != "1h" {
 		t.Fatalf("session affinity ttl = %q, want 1h", cfg.SessionAffinityTTL)
 	}
+	if cfg.MaxConcurrencyPerKey != 0 {
+		t.Fatalf("max concurrency per key = %d, want 0", cfg.MaxConcurrencyPerKey)
+	}
 
 	cfg = sm.GetEffectiveConfig(datatypes.JSONMap{
 		"max_retries": float64(5),
@@ -63,5 +66,27 @@ func TestGetEffectiveConfig_MissingRoutingKeysStayOff(t *testing.T) {
 	}
 	if cfg.SessionAffinityTTL != "30m" {
 		t.Fatalf("ttl = %q, want 30m", cfg.SessionAffinityTTL)
+	}
+}
+
+func TestGetEffectiveConfig_MaxConcurrencyPerKeyOverride(t *testing.T) {
+	sm := NewSystemSettingsManager()
+	cfg := sm.GetEffectiveConfig(nil)
+	if cfg.MaxConcurrencyPerKey != 0 {
+		t.Fatalf("default = %d, want 0", cfg.MaxConcurrencyPerKey)
+	}
+
+	cfg = sm.GetEffectiveConfig(datatypes.JSONMap{
+		"max_concurrency_per_key": float64(2),
+	})
+	if cfg.MaxConcurrencyPerKey != 2 {
+		t.Fatalf("override = %d, want 2", cfg.MaxConcurrencyPerKey)
+	}
+
+	cfg = sm.GetEffectiveConfig(datatypes.JSONMap{
+		"max_retries": float64(4),
+	})
+	if cfg.MaxConcurrencyPerKey != 0 {
+		t.Fatal("missing override must stay unlimited")
 	}
 }

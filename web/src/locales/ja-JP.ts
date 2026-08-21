@@ -350,6 +350,10 @@ export default {
     groupConfig: "グループ設定",
     groupConfigTooltip:
       "タイムアウト、リトライ回数などのグループ固有の設定パラメーター。これらの設定はグローバルデフォルトを上書きします",
+    protocolRoutingHint:
+      "プロトコル変換を有効にすると、リクエストパスからクライアント形式を識別し、このグループのチャネルタイプへ変換します。同一プロトコルは透過します。変換先はチャネルタイプです（上流形式の複数選択はありません）。",
+    protocolRoutingPaths:
+      "/v1/chat/completions と /v1beta/openai/ → Chat Completions；/v1/responses → Responses；/v1/messages → Messages；Gemini generateContent → Gemini",
     config: "設定",
     configTooltip:
       "設定するパラメータータイプを選択し、値を設定します。異なるパラメーターは異なる目的と値の範囲を持ちます",

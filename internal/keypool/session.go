@@ -1,4 +1,4 @@
-// 会话提取优先级对齐 CLIProxyAPI sdk/cliproxy/auth/selector.go，对照 v7.2.31 (05d1792d)。
+// 会话提取优先级对齐 CLIProxyAPI sdk/cliproxy/auth/selector.go，对照 v7.2.31 (05d1792d)，并补 OpenAI 缓存/Responses 字段。
 package keypool
 
 import (
@@ -28,10 +28,22 @@ func ExtractSessionID(headers http.Header, body []byte) string {
 			return id
 		}
 	}
+	if id := extractJSONString(body, "previous_response_id"); id != "" {
+		return id
+	}
+	if id := extractJSONString(body, "prompt_cache_key"); id != "" {
+		return id
+	}
 	if id := extractJSONString(body, "conversation_id"); id != "" {
 		return id
 	}
-	return hashMessages(body)
+	if id := extractJSONString(body, "session_id"); id != "" {
+		return id
+	}
+	if id := extractMetadataSessionID(body); id != "" {
+		return id
+	}
+	return hashFirstUserMessage(body)
 }
 
 func extractClaudeSession(body []byte) string {
@@ -65,6 +77,19 @@ func extractNestedUserID(body []byte) string {
 	return ""
 }
 
+func extractMetadataSessionID(body []byte) string {
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return ""
+	}
+	meta, _ := payload["metadata"].(map[string]any)
+	if meta == nil {
+		return ""
+	}
+	id, _ := meta["session_id"].(string)
+	return strings.TrimSpace(id)
+}
+
 func extractJSONString(body []byte, key string) string {
 	var payload map[string]any
 	if err := json.Unmarshal(body, &payload); err != nil {
@@ -85,26 +110,91 @@ func firstHeader(headers http.Header, names ...string) string {
 	return ""
 }
 
-func hashMessages(body []byte) string {
+func hashFirstUserMessage(body []byte) string {
 	var payload map[string]any
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return ""
 	}
-	raw, ok := payload["messages"]
-	if !ok {
-		if input, ok := payload["input"]; ok {
-			raw = input
+	model, _ := payload["model"].(string)
+	text := firstUserMessageText(payload)
+	if text == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(model + "\x00" + text))
+	return "hash:" + hex.EncodeToString(sum[:8])
+}
+
+func firstUserMessageText(payload map[string]any) string {
+	if msgs, ok := payload["messages"].([]any); ok {
+		for _, m := range msgs {
+			mm, _ := m.(map[string]any)
+			if mm == nil {
+				continue
+			}
+			role, _ := mm["role"].(string)
+			if role != "user" {
+				continue
+			}
+			if text := messageText(mm); text != "" {
+				return text
+			}
 		}
 	}
-	if raw == nil {
+	if contents, ok := payload["contents"].([]any); ok {
+		for _, c := range contents {
+			cm, _ := c.(map[string]any)
+			if cm == nil {
+				continue
+			}
+			role, _ := cm["role"].(string)
+			if role != "" && role != "user" {
+				continue
+			}
+			if text := geminiPartsText(cm); text != "" {
+				return text
+			}
+		}
+	}
+	return ""
+}
+
+func messageText(m map[string]any) string {
+	switch c := m["content"].(type) {
+	case string:
+		return c
+	case []any:
+		var b strings.Builder
+		for _, p := range c {
+			pm, _ := p.(map[string]any)
+			if pm == nil {
+				continue
+			}
+			if t, ok := pm["text"].(string); ok {
+				b.WriteString(t)
+			}
+		}
+		return b.String()
+	default:
 		return ""
 	}
-	encoded, err := json.Marshal(raw)
-	if err != nil || len(encoded) == 0 {
+}
+
+func geminiPartsText(m map[string]any) string {
+	parts, ok := m["parts"].([]any)
+	if !ok {
 		return ""
 	}
-	sum := sha256.Sum256(encoded)
-	return "hash:" + hex.EncodeToString(sum[:8])
+	var b strings.Builder
+	for _, p := range parts {
+		pm, _ := p.(map[string]any)
+		if pm == nil {
+			continue
+		}
+		if t, ok := pm["text"].(string); ok {
+			b.WriteString(t)
+		}
+	}
+	return b.String()
 }
 
 // ExtractVideoID 从视频路径中取出任务 ID。

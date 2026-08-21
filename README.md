@@ -36,8 +36,9 @@ Upstream docs: [Official Documentation](https://www.gpt-load.com/docs?lang=en) Â
 ## Features
 
 - **Transparent Proxy**: Complete preservation of native API formats, supporting OpenAI, Google Gemini, and Anthropic Claude among other formats
-- **Protocol conversion (fork)**: Optional per-group conversion among Chat Completions, Anthropic Messages, OpenAI Responses, Gemini, and OpenAI Images/Videos (CLIProxyAPI translators)
-- **Channel affinity (fork)**: Sticky session keys; 429 cooldown and automatic recovery
+- **Protocol conversion (fork)**: Optional per-group conversion among Chat Completions, Anthropic Messages, OpenAI Responses, Gemini, and OpenAI Images/Videos (CLIProxyAPI translators). Same-protocol requests pass through; the target is the group's channel type
+- **Channel affinity (fork)**: Sticky session key and upstream (plus sub-group for aggregates); 429 cooldown and automatic recovery
+- **Per-key concurrency (fork)**: Cap in-flight requests per upstream key; full keys are skipped. `0` means unlimited
 - **Outbound sanitization (fork)**: Drop `tool_choice` / `parallel_tool_calls` when `tools` is empty; per-model param overrides after redirect
 - **Key probe (fork)**: Validate real completion bodies (not HTTP 2xx only) and show upstream response in a manual-close modal
 - **Responses streaming (fork)**: Always emit framed `response.completed` SSE so Codex does not disconnect on 200
@@ -59,6 +60,19 @@ GPT-Load serves as a transparent proxy service, completely preserving the native
 - **OpenAI Format**: Official OpenAI API, Azure OpenAI, and other OpenAI-compatible services
 - **Google Gemini Format**: Native APIs for Gemini Pro, Gemini Pro Vision, and other models
 - **Anthropic Claude Format**: Claude series models, supporting high-quality conversations and text generation
+
+## Protocol conversion and routing
+
+Protocol conversion is an opt-in per-group switch (off by default). When enabled, the proxy detects the client format from the request path, converts it to the group's **channel type**, and converts the response back. Same-protocol requests (including Images/Videos on `openai` groups) pass through. There is no separate upstream-format multi-select; the conversion target is always the channel type.
+
+| Request path | Client format |
+|---|---|
+| `/v1/chat/completions`, `/v1beta/openai/` | Chat Completions |
+| `/v1/responses` | OpenAI Responses |
+| `/v1/messages` | Anthropic Messages |
+| Gemini `generateContent` / `streamGenerateContent` | Native Gemini |
+
+Channel affinity pins a session to the same key and upstream (and the same sub-group for aggregates). `max_concurrency_per_key` caps in-flight requests per key; `0` means unlimited.
 
 ## Quick Start
 

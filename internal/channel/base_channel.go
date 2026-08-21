@@ -44,17 +44,23 @@ type BaseChannel struct {
 
 // getUpstreamURL selects an upstream URL using a smooth weighted round-robin algorithm.
 func (b *BaseChannel) getUpstreamURL() *url.URL {
+	u, _ := b.pickUpstream()
+	return u
+}
+
+func (b *BaseChannel) pickUpstream() (*url.URL, int) {
 	b.upstreamLock.Lock()
 	defer b.upstreamLock.Unlock()
 
 	if len(b.Upstreams) == 0 {
-		return nil
+		return nil, -1
 	}
 	if len(b.Upstreams) == 1 {
-		return b.Upstreams[0].URL
+		return b.Upstreams[0].URL, 0
 	}
 
 	totalWeight := 0
+	bestIdx := 0
 	var best *UpstreamInfo
 
 	for i := range b.Upstreams {
@@ -64,34 +70,55 @@ func (b *BaseChannel) getUpstreamURL() *url.URL {
 
 		if best == nil || up.CurrentWeight > best.CurrentWeight {
 			best = up
+			bestIdx = i
 		}
 	}
 
 	if best == nil {
-		return b.Upstreams[0].URL // 降级到第一个可用的
+		return b.Upstreams[0].URL, 0
 	}
 
 	best.CurrentWeight -= totalWeight
-	return best.URL
+	return best.URL, bestIdx
 }
 
-// BuildUpstreamURL constructs the target URL for the upstream service.
-func (b *BaseChannel) BuildUpstreamURL(originalURL *url.URL, groupName string) (string, error) {
-	base := b.getUpstreamURL()
-	if base == nil {
-		return "", fmt.Errorf("no upstream URL configured for channel %s", b.Name)
-	}
-
+func (b *BaseChannel) buildURL(base *url.URL, originalURL *url.URL, groupName string) string {
 	finalURL := *base
 	proxyPrefix := "/proxy/" + groupName
 	requestPath := originalURL.Path
 	requestPath = strings.TrimPrefix(requestPath, proxyPrefix)
-
 	finalURL.Path = strings.TrimRight(finalURL.Path, "/") + requestPath
-
 	finalURL.RawQuery = originalURL.RawQuery
+	return finalURL.String()
+}
 
-	return finalURL.String(), nil
+// BuildUpstreamURL 按加权轮询构造上游 URL，并返回选中的上游下标。
+func (b *BaseChannel) BuildUpstreamURL(originalURL *url.URL, groupName string) (string, int, error) {
+	base, idx := b.pickUpstream()
+	if base == nil {
+		return "", 0, fmt.Errorf("no upstream URL configured for channel %s", b.Name)
+	}
+	return b.buildURL(base, originalURL, groupName), idx, nil
+}
+
+// BuildUpstreamURLAt 按指定下标重放上游。
+func (b *BaseChannel) BuildUpstreamURLAt(originalURL *url.URL, groupName string, idx int) (string, error) {
+	b.upstreamLock.Lock()
+	defer b.upstreamLock.Unlock()
+	if idx < 0 || idx >= len(b.Upstreams) {
+		return "", fmt.Errorf("upstream index %d out of range for channel %s", idx, b.Name)
+	}
+	return b.buildURL(b.Upstreams[idx].URL, originalURL, groupName), nil
+}
+
+// UpstreamBaseURL 返回指定下标上游的基址。
+func (b *BaseChannel) UpstreamBaseURL(idx int) string {
+	b.upstreamLock.Lock()
+	defer b.upstreamLock.Unlock()
+	if idx < 0 || idx >= len(b.Upstreams) {
+		return ""
+	}
+	return b.Upstreams[idx].URL.String()
 }
 
 // IsConfigStale checks if the channel's configuration is stale compared to the provided group.

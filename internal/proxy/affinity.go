@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"gpt-load/internal/channel"
 	"gpt-load/internal/keypool"
 	"gpt-load/internal/models"
 	"gpt-load/internal/translator"
@@ -21,17 +22,43 @@ type affinityState struct {
 	videoCreate bool
 }
 
-func buildAffinityState(group *models.Group, headers http.Header, path, method string, body []byte) *affinityState {
-	if group == nil || !group.EffectiveConfig.EnableChannelAffinity {
-		return &affinityState{}
-	}
-	model := ""
+func extractModelFromBody(body []byte) string {
 	var probe struct {
 		Model string `json:"model"`
 	}
 	if json.Unmarshal(body, &probe) == nil {
-		model = probe.Model
+		return probe.Model
 	}
+	return ""
+}
+
+// evaluateBoundSubGroup 判断入口组绑定的子分组能否重放。paused 为 true 时调用方应直接 403。
+func evaluateBoundSubGroup(binding *keypool.AffinityBinding, boundGroup *models.Group) (replay, paused bool) {
+	if binding == nil || boundGroup == nil {
+		return false, false
+	}
+	if boundGroup.Paused {
+		return false, true
+	}
+	if !boundGroup.EffectiveConfig.EnableChannelAffinity {
+		return false, false
+	}
+	return true, false
+}
+
+func bindingUpstreamFresh(ch channel.ChannelProxy, b *keypool.AffinityBinding) bool {
+	if ch == nil || b == nil {
+		return false
+	}
+	base := ch.UpstreamBaseURL(b.UpstreamIdx)
+	return base != "" && base == b.BaseURL
+}
+
+func buildAffinityState(group *models.Group, headers http.Header, path, method string, body []byte) *affinityState {
+	if group == nil || !group.EffectiveConfig.EnableChannelAffinity {
+		return &affinityState{}
+	}
+	model := extractModelFromBody(body)
 	videoID := keypool.ExtractVideoID(path)
 	isVideo := translator.DetectFromPath(path) == translator.FormatVideos
 	return &affinityState{

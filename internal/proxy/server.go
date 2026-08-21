@@ -74,27 +74,63 @@ func (ps *ProxyServer) HandleProxy(c *gin.Context) {
 		return
 	}
 
-	// Select sub-group if this is an aggregate group
-	subGroupName, err := ps.subGroupManager.SelectSubGroup(originalGroup)
+	bodyBytes, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		if errors.Is(err, app_errors.ErrGroupPaused) {
-			response.ErrorI18nFromAPIError(c, app_errors.ErrGroupPaused, "error.group_paused")
-			return
-		}
-		logrus.WithFields(logrus.Fields{
-			"aggregate_group": originalGroup.Name,
-			"error":           err,
-		}).Error("Failed to select sub-group from aggregate")
-		response.Error(c, app_errors.NewAPIError(app_errors.ErrNoKeysAvailable, "No available sub-groups"))
+		logrus.Errorf("Failed to read request body: %v", err)
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "Failed to read request body"))
 		return
+	}
+	c.Request.Body.Close()
+
+	sessionID := keypool.ExtractSessionID(c.Request.Header, bodyBytes)
+	model := extractModelFromBody(bodyBytes)
+	var binding *keypool.AffinityBinding
+	if sessionID != "" {
+		binding, _ = ps.keyProvider.GetBinding(originalGroup.ID, sessionID, model)
 	}
 
 	group := originalGroup
-	if subGroupName != "" {
-		group, err = ps.groupManager.GetGroupByName(subGroupName)
-		if err != nil {
-			response.Error(c, app_errors.ParseDBError(err))
+	usedBoundSubGroup := false
+	if binding != nil && binding.SubGroup != "" {
+		boundGroup, gerr := ps.groupManager.GetGroupByName(binding.SubGroup)
+		if gerr != nil {
+			binding = nil
+		} else {
+			replay, paused := evaluateBoundSubGroup(binding, boundGroup)
+			if paused {
+				response.ErrorI18nFromAPIError(c, app_errors.ErrGroupPaused, "error.group_paused")
+				return
+			}
+			if replay {
+				group = boundGroup
+				usedBoundSubGroup = true
+			} else {
+				binding = nil
+			}
+		}
+	}
+
+	if !usedBoundSubGroup {
+		subGroupName, subErr := ps.subGroupManager.SelectSubGroup(originalGroup)
+		if subErr != nil {
+			if errors.Is(subErr, app_errors.ErrGroupPaused) {
+				response.ErrorI18nFromAPIError(c, app_errors.ErrGroupPaused, "error.group_paused")
+				return
+			}
+			logrus.WithFields(logrus.Fields{
+				"aggregate_group": originalGroup.Name,
+				"error":           subErr,
+			}).Error("Failed to select sub-group from aggregate")
+			response.Error(c, app_errors.NewAPIError(app_errors.ErrNoKeysAvailable, "No available sub-groups"))
 			return
+		}
+		group = originalGroup
+		if subGroupName != "" {
+			group, err = ps.groupManager.GetGroupByName(subGroupName)
+			if err != nil {
+				response.Error(c, app_errors.ParseDBError(err))
+				return
+			}
 		}
 	}
 
@@ -109,13 +145,16 @@ func (ps *ProxyServer) HandleProxy(c *gin.Context) {
 		return
 	}
 
-	bodyBytes, err := io.ReadAll(c.Request.Body)
-	if err != nil {
-		logrus.Errorf("Failed to read request body: %v", err)
-		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "Failed to read request body"))
-		return
+	if binding != nil {
+		if !bindingUpstreamFresh(channelHandler, binding) {
+			binding = nil
+		} else {
+			key, keyErr := ps.keyProvider.GetKeyByID(group.ID, binding.KeyID)
+			if keyErr != nil || key == nil || key.Status != models.KeyStatusActive || ps.keyProvider.IsCooling(group.ID, binding.KeyID) {
+				binding = nil
+			}
+		}
 	}
-	c.Request.Body.Close()
 
 	finalBodyBytes, err := ps.applyParamOverrides(bodyBytes, group)
 	if err != nil {
@@ -154,7 +193,7 @@ func (ps *ProxyServer) HandleProxy(c *gin.Context) {
 	}
 
 	aff := buildAffinityState(group, c.Request.Header, c.Request.URL.Path, c.Request.Method, bodyBytes)
-	ps.executeRequestWithRetry(c, channelHandler, originalGroup, group, finalBodyBytes, isStream, startTime, 0, route, aff)
+	ps.executeRequestWithRetry(c, channelHandler, originalGroup, group, finalBodyBytes, isStream, startTime, 0, route, aff, binding)
 }
 
 // executeRequestWithRetry is the core recursive function for handling requests and retries.
@@ -169,19 +208,27 @@ func (ps *ProxyServer) executeRequestWithRetry(
 	retryCount int,
 	route *protocolRoute,
 	aff *affinityState,
+	binding *keypool.AffinityBinding,
 ) {
 	cfg := group.EffectiveConfig
+	maxConc := cfg.MaxConcurrencyPerKey
 
-	selectOpts := keypool.SelectOptions{}
+	selectOpts := keypool.SelectOptions{
+		MaxConcurrency: maxConc,
+		RequestTimeout: time.Duration(cfg.RequestTimeout) * time.Second,
+		EntryGroupID:   originalGroup.ID,
+		SkipBindWrite:  retryCount > 0,
+	}
+	if originalGroup.GroupType == "aggregate" {
+		selectOpts.SubGroup = group.Name
+	}
 	if aff != nil && aff.enabled {
-		selectOpts = keypool.SelectOptions{
-			EnableAffinity:    true,
-			SessionID:         aff.sessionID,
-			Model:             aff.model,
-			TTL:               aff.ttl,
-			VideoID:           aff.videoID,
-			RequireVideoBound: aff.videoID != "" && !aff.videoCreate,
-		}
+		selectOpts.EnableAffinity = true
+		selectOpts.SessionID = aff.sessionID
+		selectOpts.Model = aff.model
+		selectOpts.TTL = aff.ttl
+		selectOpts.VideoID = aff.videoID
+		selectOpts.RequireVideoBound = aff.videoID != "" && !aff.videoCreate
 	}
 	apiKey, err := ps.keyProvider.SelectKeyWithOptions(group.ID, selectOpts)
 	if err != nil {
@@ -190,15 +237,42 @@ func (ps *ProxyServer) executeRequestWithRetry(
 		ps.logRequest(c, originalGroup, group, nil, startTime, http.StatusServiceUnavailable, err, isStream, "", channelHandler, bodyBytes, models.RequestTypeFinal)
 		return
 	}
+	defer ps.keyProvider.ReleaseKey(group.ID, apiKey.ID, maxConc)
 
 	requestURL := c.Request.URL
 	if route != nil && route.rewritePath != "" {
 		requestURL = rewriteRequestURL(c.Request.URL, route.rewritePath)
 	}
-	upstreamURL, err := channelHandler.BuildUpstreamURL(requestURL, originalGroup.Name)
-	if err != nil {
-		response.Error(c, app_errors.NewAPIError(app_errors.ErrInternalServer, fmt.Sprintf("Failed to build upstream URL: %v", err)))
-		return
+	var upstreamURL string
+	var upstreamIdx int
+	replayed := false
+	if retryCount == 0 && binding != nil && apiKey.ID == binding.KeyID {
+		if u, berr := channelHandler.BuildUpstreamURLAt(requestURL, originalGroup.Name, binding.UpstreamIdx); berr == nil {
+			upstreamURL = u
+			upstreamIdx = binding.UpstreamIdx
+			replayed = true
+		}
+	}
+	if !replayed {
+		u, idx, buildErr := channelHandler.BuildUpstreamURL(requestURL, originalGroup.Name)
+		if buildErr != nil {
+			response.Error(c, app_errors.NewAPIError(app_errors.ErrInternalServer, fmt.Sprintf("Failed to build upstream URL: %v", buildErr)))
+			return
+		}
+		upstreamURL = u
+		upstreamIdx = idx
+	}
+
+	if retryCount == 0 && aff != nil && aff.enabled && aff.sessionID != "" {
+		capacitySkip := binding != nil && apiKey.ID != binding.KeyID
+		if !capacitySkip {
+			ps.keyProvider.SetBinding(originalGroup.ID, aff.sessionID, aff.model, keypool.AffinityBinding{
+				KeyID:       apiKey.ID,
+				UpstreamIdx: upstreamIdx,
+				BaseURL:     channelHandler.UpstreamBaseURL(upstreamIdx),
+				SubGroup:    selectOpts.SubGroup,
+			}, aff.ttl)
+		}
 	}
 
 	var ctx context.Context
@@ -329,7 +403,7 @@ func (ps *ProxyServer) executeRequestWithRetry(
 			return
 		}
 
-		ps.executeRequestWithRetry(c, channelHandler, originalGroup, group, bodyBytes, isStream, startTime, retryCount+1, route, aff)
+		ps.executeRequestWithRetry(c, channelHandler, originalGroup, group, bodyBytes, isStream, startTime, retryCount+1, route, aff, binding)
 		return
 	}
 

@@ -1,11 +1,13 @@
 package keypool
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
+	app_errors "gpt-load/internal/errors"
 	"gpt-load/internal/models"
 	"gpt-load/internal/store"
 
@@ -21,6 +23,14 @@ const (
 	maxCooldown            = 30 * time.Second
 )
 
+// AffinityBinding 入口组上的会话绑定：Key + 上游 + 子分组。
+type AffinityBinding struct {
+	KeyID       uint   `json:"key_id"`
+	UpstreamIdx int    `json:"upstream_idx"`
+	BaseURL     string `json:"base_url"`
+	SubGroup    string `json:"sub_group"`
+}
+
 // SelectOptions 控制亲和选 Key。
 type SelectOptions struct {
 	EnableAffinity    bool
@@ -29,6 +39,13 @@ type SelectOptions struct {
 	TTL               time.Duration
 	VideoID           string
 	RequireVideoBound bool
+	MaxConcurrency    int
+	RequestTimeout    time.Duration
+	EntryGroupID      uint
+	SubGroup          string
+	UpstreamIdx       int
+	UpstreamBaseURL   string
+	SkipBindWrite     bool
 }
 
 func bindKey(groupID uint, sessionID, model string) string {
@@ -45,6 +62,13 @@ func backoffKey(groupID, keyID uint) string {
 
 func videoKey(groupID uint, videoID string) string {
 	return affinityVideoPrefix + fmt.Sprintf("%d:%s", groupID, videoID)
+}
+
+func bindGroupID(groupID uint, opts SelectOptions) uint {
+	if opts.EntryGroupID != 0 {
+		return opts.EntryGroupID
+	}
+	return groupID
 }
 
 func (p *KeyProvider) getBoundKeyID(cacheKey string) (uint, bool) {
@@ -66,6 +90,42 @@ func (p *KeyProvider) setBoundKeyID(cacheKey string, keyID uint, ttl time.Durati
 	if err := p.store.Set(cacheKey, []byte(strconv.FormatUint(uint64(keyID), 10)), ttl); err != nil {
 		logrus.WithError(err).Debug("affinity cache write failed, falling back to rotation")
 	}
+}
+
+// GetBinding 读取入口组上的 JSON 绑定。旧的纯数字缓存视为未命中。
+func (p *KeyProvider) GetBinding(groupID uint, sessionID, model string) (*AffinityBinding, bool) {
+	raw, err := p.store.Get(bindKey(groupID, sessionID, model))
+	if err != nil {
+		return nil, false
+	}
+	var b AffinityBinding
+	if err := json.Unmarshal(raw, &b); err != nil || b.KeyID == 0 {
+		return nil, false
+	}
+	return &b, true
+}
+
+// SetBinding 写入或续期会话绑定。
+func (p *KeyProvider) SetBinding(groupID uint, sessionID, model string, b AffinityBinding, ttl time.Duration) {
+	if sessionID == "" || b.KeyID == 0 {
+		return
+	}
+	if ttl <= 0 {
+		ttl = time.Hour
+	}
+	raw, err := json.Marshal(b)
+	if err != nil {
+		logrus.WithError(err).Debug("affinity binding marshal failed")
+		return
+	}
+	if err := p.store.Set(bindKey(groupID, sessionID, model), raw, ttl); err != nil {
+		logrus.WithError(err).Debug("affinity cache write failed, falling back to rotation")
+	}
+}
+
+// DeleteBinding 删除入口组上的会话绑定。
+func (p *KeyProvider) DeleteBinding(groupID uint, sessionID, model string) {
+	_ = p.store.Delete(bindKey(groupID, sessionID, model))
 }
 
 func (p *KeyProvider) IsCooling(groupID, keyID uint) bool {
@@ -136,6 +196,11 @@ func (p *KeyProvider) loadKeyByID(groupID, keyID uint) (*models.APIKey, error) {
 	}, nil
 }
 
+// GetKeyByID 读取一把 Key 的缓存详情。
+func (p *KeyProvider) GetKeyByID(groupID, keyID uint) (*models.APIKey, error) {
+	return p.loadKeyByID(groupID, keyID)
+}
+
 func (p *KeyProvider) keyUsable(groupID uint, key *models.APIKey) bool {
 	if key == nil {
 		return false
@@ -146,7 +211,36 @@ func (p *KeyProvider) keyUsable(groupID uint, key *models.APIKey) bool {
 	return !p.IsCooling(groupID, key.ID)
 }
 
-// SelectKeyWithOptions 在可选亲和/冷却约束下选 Key。
+func (p *KeyProvider) tryAcquire(groupID uint, key *models.APIKey, opts SelectOptions) (bool, error) {
+	if key == nil {
+		return false, nil
+	}
+	return p.AcquireKey(groupID, key.ID, opts.MaxConcurrency, opts.RequestTimeout)
+}
+
+func (p *KeyProvider) writeBinding(groupID uint, key *models.APIKey, opts SelectOptions, existing *AffinityBinding) {
+	if opts.SkipBindWrite || !opts.EnableAffinity || opts.SessionID == "" || key == nil {
+		return
+	}
+	b := AffinityBinding{
+		KeyID:       key.ID,
+		UpstreamIdx: opts.UpstreamIdx,
+		BaseURL:     opts.UpstreamBaseURL,
+		SubGroup:    opts.SubGroup,
+	}
+	if existing != nil && existing.KeyID == key.ID {
+		if b.BaseURL == "" {
+			b.UpstreamIdx = existing.UpstreamIdx
+			b.BaseURL = existing.BaseURL
+		}
+		if b.SubGroup == "" {
+			b.SubGroup = existing.SubGroup
+		}
+	}
+	p.SetBinding(bindGroupID(groupID, opts), opts.SessionID, opts.Model, b, opts.TTL)
+}
+
+// SelectKeyWithOptions 在可选亲和/冷却/并发约束下选 Key。
 func (p *KeyProvider) SelectKeyWithOptions(groupID uint, opts SelectOptions) (*models.APIKey, error) {
 	if opts.RequireVideoBound {
 		id, ok := p.getBoundKeyID(videoKey(groupID, opts.VideoID))
@@ -157,32 +251,69 @@ func (p *KeyProvider) SelectKeyWithOptions(groupID uint, opts SelectOptions) (*m
 		if err != nil || !p.keyUsable(groupID, key) {
 			return nil, fmt.Errorf("视频任务绑定的 Key 不可用")
 		}
+		acquired, acqErr := p.tryAcquire(groupID, key, opts)
+		if acqErr != nil {
+			return nil, acqErr
+		}
+		if !acquired {
+			return nil, app_errors.ErrNoActiveKeys
+		}
 		return key, nil
 	}
 
+	var existing *AffinityBinding
+	capacitySkip := false
 	if opts.EnableAffinity && opts.SessionID != "" {
-		if id, ok := p.getBoundKeyID(bindKey(groupID, opts.SessionID, opts.Model)); ok {
-			key, err := p.loadKeyByID(groupID, id)
+		if b, ok := p.GetBinding(bindGroupID(groupID, opts), opts.SessionID, opts.Model); ok {
+			existing = b
+			key, err := p.loadKeyByID(groupID, b.KeyID)
 			if err == nil && p.keyUsable(groupID, key) {
-				p.setBoundKeyID(bindKey(groupID, opts.SessionID, opts.Model), key.ID, opts.TTL)
-				return key, nil
+				acquired, acqErr := p.tryAcquire(groupID, key, opts)
+				if acqErr != nil {
+					return nil, acqErr
+				}
+				if acquired {
+					p.writeBinding(groupID, key, opts, existing)
+					return key, nil
+				}
+				capacitySkip = true
 			}
 		}
 	}
 
+	attempts := int64(16)
+	if n, err := p.store.LLen(fmt.Sprintf("group:%d:active_keys", groupID)); err == nil && n > 0 {
+		attempts = n
+	}
+
 	var last *models.APIKey
-	for range 16 {
+	for range attempts {
 		key, err := p.SelectKey(groupID)
 		if err != nil {
+			if last != nil && opts.MaxConcurrency <= 0 {
+				return last, err
+			}
 			return last, err
 		}
 		last = key
-		if !p.IsCooling(groupID, key.ID) {
-			if opts.EnableAffinity && opts.SessionID != "" {
-				p.setBoundKeyID(bindKey(groupID, opts.SessionID, opts.Model), key.ID, opts.TTL)
-			}
-			return key, nil
+		if !p.keyUsable(groupID, key) {
+			continue
 		}
+		acquired, acqErr := p.tryAcquire(groupID, key, opts)
+		if acqErr != nil {
+			return nil, acqErr
+		}
+		if !acquired {
+			continue
+		}
+		if !capacitySkip {
+			p.writeBinding(groupID, key, opts, existing)
+		}
+		return key, nil
+	}
+
+	if opts.MaxConcurrency > 0 {
+		return nil, app_errors.ErrNoActiveKeys
 	}
 	if last != nil {
 		return last, nil

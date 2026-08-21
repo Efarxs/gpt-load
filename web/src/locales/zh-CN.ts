@@ -342,6 +342,10 @@ export default {
     groupConfig: "分组配置",
     groupConfigTooltip:
       "针对此分组的专用配置参数，如超时时间、重试次数等。这些配置会覆盖全局默认设置",
+    protocolRoutingHint:
+      "协议转换开启后，按入口路径识别客户端格式，并转换成该分组的渠道类型。同协议恒等透传，转换目标由渠道类型决定（无独立上游格式多选）。",
+    protocolRoutingPaths:
+      "/v1/chat/completions、/v1beta/openai/ → Chat Completions；/v1/responses → Responses；/v1/messages → Messages；Gemini generateContent → Gemini",
     config: "配置",
     configTooltip: "选择要配置的参数类型，然后设置对应的数值。不同参数有不同的作用和取值范围",
     selectConfigParam: "请选择配置参数",

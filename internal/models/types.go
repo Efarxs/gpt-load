@@ -45,6 +45,7 @@ type GroupConfig struct {
 	EnableChannelAffinity        *bool   `json:"enable_channel_affinity,omitempty"`
 	SessionAffinityTTL           *string `json:"session_affinity_ttl,omitempty"`
 	StripOrphanToolFlags         *bool   `json:"strip_orphan_tool_flags,omitempty"`
+	MaxConcurrencyPerKey         *int    `json:"max_concurrency_per_key,omitempty"`
 }
 
 // HeaderRule defines a single rule for header manipulation.

@@ -33,6 +33,8 @@ func DetectFromPath(path string) Format {
 	switch {
 	case strings.Contains(p, "/v1/chat/completions"):
 		return FormatOpenAI
+	case strings.Contains(p, "/v1beta/openai/"):
+		return FormatOpenAI
 	case strings.Contains(p, "/v1/responses"):
 		return FormatOpenAIResponse
 	case strings.HasSuffix(p, "/v1/messages") || strings.Contains(p, "/v1/messages/"):

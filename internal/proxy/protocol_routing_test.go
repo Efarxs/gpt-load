@@ -110,6 +110,33 @@ func TestApplyProtocolRouting_UsesSelectedGroupOnly(t *testing.T) {
 	}
 }
 
+func TestApplyProtocolRouting_GeminiOpenAICompatToAnthropic(t *testing.T) {
+	group := &models.Group{
+		ChannelType: "anthropic",
+		EffectiveConfig: types.SystemSettings{
+			EnableProtocolRouting: true,
+		},
+	}
+	body := []byte(`{"model":"gpt","messages":[{"role":"user","content":"hi"}]}`)
+	out, route, err := applyProtocolRouting(group, "ant", "/proxy/ant/v1beta/openai/chat/completions", "application/json", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !route.converted {
+		t.Fatal("expected conversion from gemini openai-compat path")
+	}
+	if route.rewritePath != "/proxy/ant/v1/messages" {
+		t.Fatalf("rewritePath = %q", route.rewritePath)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := got["messages"]; !ok {
+		t.Fatal("converted body missing messages")
+	}
+}
+
 func TestApplyProtocolRouting_ModelsPassthrough(t *testing.T) {
 	group := &models.Group{
 		ChannelType: "openai",

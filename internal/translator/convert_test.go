@@ -9,6 +9,7 @@ import (
 func TestDetectFromPath(t *testing.T) {
 	cases := map[string]Format{
 		"/v1/chat/completions": FormatOpenAI,
+		"/v1beta/openai/chat/completions": FormatOpenAI,
 		"/v1/responses":        FormatOpenAIResponse,
 		"/v1/messages":         FormatClaude,
 		"/v1beta/models/gemini-pro:generateContent":       FormatGemini,

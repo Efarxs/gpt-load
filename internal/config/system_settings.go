@@ -452,6 +452,7 @@ func (sm *SystemSettingsManager) DisplaySystemConfig(settings types.SystemSettin
 	logrus.Infof("    Protocol Routing: %v", settings.EnableProtocolRouting)
 	logrus.Infof("    Channel Affinity: %v", settings.EnableChannelAffinity)
 	logrus.Infof("    Session Affinity TTL: %s", settings.SessionAffinityTTL)
+	logrus.Infof("    Max Concurrency Per Key: %d", settings.MaxConcurrencyPerKey)
 	logrus.Info("====================================")
 	logrus.Info("")
 }

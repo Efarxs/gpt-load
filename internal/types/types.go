@@ -53,6 +53,7 @@ type SystemSettings struct {
 	EnableChannelAffinity bool   `json:"enable_channel_affinity" default:"false" name:"config.enable_channel_affinity" category:"config.category.routing" desc:"config.enable_channel_affinity_desc"`
 	SessionAffinityTTL    string `json:"session_affinity_ttl" default:"1h" name:"config.session_affinity_ttl" category:"config.category.routing" desc:"config.session_affinity_ttl_desc"`
 	StripOrphanToolFlags  bool   `json:"strip_orphan_tool_flags" default:"true" name:"config.strip_orphan_tool_flags" category:"config.category.routing" desc:"config.strip_orphan_tool_flags_desc"`
+	MaxConcurrencyPerKey  int    `json:"max_concurrency_per_key" default:"0" name:"config.max_concurrency_per_key" category:"config.category.routing" desc:"config.max_concurrency_per_key_desc" validate:"min=0"`
 
 	// For cache
 	ProxyKeysMap map[string]struct{} `json:"-"`

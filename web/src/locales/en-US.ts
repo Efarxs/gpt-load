@@ -351,6 +351,10 @@ export default {
     groupConfig: "Group Configuration",
     groupConfigTooltip:
       "Group-specific configuration parameters like timeout, retry count, etc. These settings override global defaults",
+    protocolRoutingHint:
+      "When protocol conversion is on, the client format is detected from the request path and converted to this group's channel type. Same-protocol requests pass through. The conversion target is the channel type (no separate upstream-format list).",
+    protocolRoutingPaths:
+      "/v1/chat/completions and /v1beta/openai/ → Chat Completions; /v1/responses → Responses; /v1/messages → Messages; Gemini generateContent → Gemini",
     config: "Config",
     configTooltip:
       "Select parameter type to configure, then set the value. Different parameters have different purposes and value ranges",

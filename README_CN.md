@@ -36,8 +36,9 @@
 ## 功能特性
 
 - **透明代理**: 完全保留原生 API 格式，支持 OpenAI、Google Gemini 和 Anthropic Claude 等多种格式
-- **可选协议转换（本 fork）**: 分组开启后，可将 Chat Completions、Anthropic Messages、OpenAI Responses、Gemini 以及 OpenAI 生图/视频转换成该分组渠道协议（CLIProxyAPI 转换器）
-- **可选渠道亲和性（本 fork）**: 同一会话粘滞同一把 Key；429 按时间冷却并自动恢复
+- **可选协议转换（本 fork）**: 分组开启后，可将 Chat Completions、Anthropic Messages、OpenAI Responses、Gemini 以及 OpenAI 生图/视频转换成该分组渠道协议（CLIProxyAPI 转换器）。同协议恒等透传；转换目标由渠道类型决定
+- **可选渠道亲和性（本 fork）**: 同一会话粘滞同一把 Key 和同一条上游（聚合组还会粘子分组）；429 按时间冷却并自动恢复
+- **每 Key 并发上限（本 fork）**: 限制单把上游 Key 的在途请求数，打满后改选其他 Key；0 表示不限制
 - **出站清洗（本 fork）**: 没有 `tools` 时自动去掉 `tool_choice` / `parallel_tool_calls`；支持映射后的模型级参数覆盖
 - **真实密钥探测（本 fork）**: 校验补全文而不只看 HTTP 2xx，并弹出上游响应（需手动关闭）
 - **Responses 流式（本 fork）**: 补齐带空行分隔的 `response.completed`，避免 Codex 在 200 时仍报断流
@@ -59,6 +60,19 @@ GPT-Load 作为透明代理服务，完整保留各 AI 服务商的原生 API �
 - **OpenAI 格式**: 官方 OpenAI API、Azure OpenAI、以及其他 OpenAI 兼容服务
 - **Google Gemini 格式**: Gemini Pro、Gemini Pro Vision 等模型的原生 API
 - **Anthropic Claude 格式**: Claude 系列模型，支持高质量的对话和文本生成
+
+## 协议转换与选路
+
+协议转换是分组级开关，默认关闭。开启后按入口路径识别客户端格式，转换成该分组 **渠道类型** 对应的上游协议，响应再还原。同协议（含 `openai` 渠道对生图/视频）恒等透传，没有与渠道类型脱钩的「上游格式」多选。
+
+| 入口路径 | 客户端格式 |
+|---|---|
+| `/v1/chat/completions`、`/v1beta/openai/` | Chat Completions |
+| `/v1/responses` | OpenAI Responses |
+| `/v1/messages` | Anthropic Messages |
+| Gemini `generateContent` / `streamGenerateContent` | Gemini 原生 |
+
+渠道亲和性开启时，同一会话会粘滞到同一把 Key 和同一条上游；聚合组还会粘到首次选中的子分组。`max_concurrency_per_key` 为每把 Key 的在途上限，`0` 表示不限制。
 
 ## 快速开始
 

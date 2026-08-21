@@ -11,8 +11,14 @@ import (
 
 // ChannelProxy defines the interface for different API channel proxies.
 type ChannelProxy interface {
-	// BuildUpstreamURL constructs the target URL for the upstream service.
-	BuildUpstreamURL(originalURL *url.URL, groupName string) (string, error)
+	// BuildUpstreamURL 按加权轮询构造上游 URL，并返回选中的上游下标。
+	BuildUpstreamURL(originalURL *url.URL, groupName string) (string, int, error)
+
+	// BuildUpstreamURLAt 按指定下标重放上游。
+	BuildUpstreamURLAt(originalURL *url.URL, groupName string, idx int) (string, error)
+
+	// UpstreamBaseURL 返回指定下标上游的基址，越界时为空。
+	UpstreamBaseURL(idx int) string
 
 	// IsConfigStale checks if the channel's configuration is stale compared to the provided group.
 	IsConfigStale(group *models.Group) bool
